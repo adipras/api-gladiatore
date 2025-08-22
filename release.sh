@@ -95,6 +95,12 @@ EOF
     # Analyze git changes to categorize updates
     print_status "Analyzing changes since last release..."
     
+    # Check if we're in a git repository
+    if ! git rev-parse --git-dir > /dev/null 2>&1; then
+        print_warning "Not a git repository. Initializing git..."
+        git init
+    fi
+    
     # Get the last tag for comparison
     LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
     
@@ -167,10 +173,18 @@ EOF
         
         # If no categorized commits, show all recent commits
         if [ "$HAS_ADDED" = false ] && [ "$HAS_CHANGED" = false ] && [ "$HAS_FIXED" = false ] && [ "$HAS_REMOVED" = false ]; then
-            echo "### Changed" >> "$TEMP_FILE"
-            git log "$LAST_TAG"..HEAD --oneline --pretty=format:"- %s" 2>/dev/null | head -10 >> "$TEMP_FILE"
-            echo "" >> "$TEMP_FILE"
-            echo "" >> "$TEMP_FILE"
+            # Check if there are any commits at all
+            COMMIT_COUNT=$(git log "$LAST_TAG"..HEAD --oneline 2>/dev/null | wc -l | tr -d ' ')
+            if [ "$COMMIT_COUNT" -gt 0 ]; then
+                echo "### Changed" >> "$TEMP_FILE"
+                git log "$LAST_TAG"..HEAD --oneline --pretty=format:"- %s" 2>/dev/null | head -10 >> "$TEMP_FILE"
+                echo "" >> "$TEMP_FILE"
+                echo "" >> "$TEMP_FILE"
+            else
+                echo "### Changed" >> "$TEMP_FILE"
+                echo "- Minor updates and improvements" >> "$TEMP_FILE"
+                echo "" >> "$TEMP_FILE"
+            fi
         fi
         
         # Add summary statistics
