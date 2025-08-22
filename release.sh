@@ -99,7 +99,7 @@ EOF
     LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
     
     if [ -z "$LAST_TAG" ]; then
-        # First release
+        # First release - count all files in the repository
         echo "### Added" >> "$TEMP_FILE"
         echo "- Initial release of API Gladiatore platform" >> "$TEMP_FILE"
         echo "- JSON-to-Microservice generation engine" >> "$TEMP_FILE"
@@ -108,11 +108,23 @@ EOF
         echo "- MySQL database integration with GORM" >> "$TEMP_FILE"
         echo "- Tailwind CSS styled interface with modern UI/UX" >> "$TEMP_FILE"
         echo "" >> "$TEMP_FILE"
+        
+        # For first release, count all files in repository
+        echo "### Summary" >> "$TEMP_FILE"
+        local TOTAL_FILES=$(find . -type f -not -path "./.git/*" -not -path "./node_modules/*" -not -path "./frontend/node_modules/*" -not -path "./frontend/build/*" -not -path "./generated/*" 2>/dev/null | wc -l | tr -d ' ')
+        local GO_FILES=$(find . -name "*.go" -not -path "./generated/*" 2>/dev/null | wc -l | tr -d ' ')
+        local TS_FILES=$(find . -name "*.ts" -o -name "*.tsx" -not -path "./node_modules/*" -not -path "./frontend/node_modules/*" 2>/dev/null | wc -l | tr -d ' ')
+        local JS_FILES=$(find . -name "*.js" -o -name "*.jsx" -not -path "./node_modules/*" -not -path "./frontend/node_modules/*" -not -path "./frontend/build/*" 2>/dev/null | wc -l | tr -d ' ')
+        echo "- Total files: $TOTAL_FILES" >> "$TEMP_FILE"
+        echo "- Go files: $GO_FILES" >> "$TEMP_FILE"
+        echo "- TypeScript/React files: $TS_FILES" >> "$TEMP_FILE"
+        echo "- JavaScript files: $JS_FILES" >> "$TEMP_FILE"
+        echo "" >> "$TEMP_FILE"
     else
         # Analyze changes since last tag
-        local ADDED_FILES=$(git diff --name-status "$LAST_TAG"..HEAD 2>/dev/null | grep "^A" | wc -l)
-        local MODIFIED_FILES=$(git diff --name-status "$LAST_TAG"..HEAD 2>/dev/null | grep "^M" | wc -l)
-        local DELETED_FILES=$(git diff --name-status "$LAST_TAG"..HEAD 2>/dev/null | grep "^D" | wc -l)
+        local ADDED_FILES=$(git diff --name-status "$LAST_TAG"..HEAD 2>/dev/null | grep "^A" | wc -l | tr -d ' ')
+        local MODIFIED_FILES=$(git diff --name-status "$LAST_TAG"..HEAD 2>/dev/null | grep "^M" | wc -l | tr -d ' ')
+        local DELETED_FILES=$(git diff --name-status "$LAST_TAG"..HEAD 2>/dev/null | grep "^D" | wc -l | tr -d ' ')
         
         # Check for specific changes
         local HAS_ADDED=false
