@@ -59,7 +59,131 @@ fi
 
 print_status "Starting release process for version $VERSION"
 
-# Add all files
+# Update or create CHANGELOG.md
+print_status "Updating CHANGELOG.md..."
+update_changelog() {
+    local TEMP_FILE=$(mktemp)
+    local TODAY=$(date +%Y-%m-%d)
+    
+    # Check if CHANGELOG.md exists
+    if [ ! -f CHANGELOG.md ]; then
+        print_status "Creating new CHANGELOG.md..."
+        cat > CHANGELOG.md << EOF
+# Changelog
+
+All notable changes to API Gladiatore will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+EOF
+    fi
+    
+    # Prepare new version entry
+    cat > "$TEMP_FILE" << EOF
+# Changelog
+
+All notable changes to API Gladiatore will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [$VERSION] - $TODAY
+
+EOF
+
+    # Analyze git changes to categorize updates
+    print_status "Analyzing changes since last release..."
+    
+    # Get the last tag for comparison
+    LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+    
+    if [ -z "$LAST_TAG" ]; then
+        # First release
+        echo "### Added" >> "$TEMP_FILE"
+        echo "- Initial release of API Gladiatore platform" >> "$TEMP_FILE"
+        echo "- JSON-to-Microservice generation engine" >> "$TEMP_FILE"
+        echo "- Service management dashboard with React SPA" >> "$TEMP_FILE"
+        echo "- Real-time service and endpoint status management" >> "$TEMP_FILE"
+        echo "- MySQL database integration with GORM" >> "$TEMP_FILE"
+        echo "- Tailwind CSS styled interface with modern UI/UX" >> "$TEMP_FILE"
+        echo "" >> "$TEMP_FILE"
+    else
+        # Analyze changes since last tag
+        local ADDED_FILES=$(git diff --name-status "$LAST_TAG"..HEAD 2>/dev/null | grep "^A" | wc -l)
+        local MODIFIED_FILES=$(git diff --name-status "$LAST_TAG"..HEAD 2>/dev/null | grep "^M" | wc -l)
+        local DELETED_FILES=$(git diff --name-status "$LAST_TAG"..HEAD 2>/dev/null | grep "^D" | wc -l)
+        
+        # Check for specific changes
+        local HAS_ADDED=false
+        local HAS_CHANGED=false
+        local HAS_FIXED=false
+        local HAS_REMOVED=false
+        
+        # Analyze commit messages for categories
+        if git log "$LAST_TAG"..HEAD --oneline 2>/dev/null | grep -qi "add\|feat\|feature\|new"; then
+            HAS_ADDED=true
+            echo "### Added" >> "$TEMP_FILE"
+            git log "$LAST_TAG"..HEAD --oneline --grep="^feat\|^add\|^feature" --pretty=format:"- %s" 2>/dev/null | sed 's/^feat: //i; s/^add: //i; s/^feature: //i' >> "$TEMP_FILE"
+            echo "" >> "$TEMP_FILE"
+            echo "" >> "$TEMP_FILE"
+        fi
+        
+        if git log "$LAST_TAG"..HEAD --oneline 2>/dev/null | grep -qi "change\|update\|improve\|enhance"; then
+            HAS_CHANGED=true
+            echo "### Changed" >> "$TEMP_FILE"
+            git log "$LAST_TAG"..HEAD --oneline --grep="^change\|^update\|^improve" --pretty=format:"- %s" 2>/dev/null | sed 's/^change: //i; s/^update: //i; s/^improve: //i' >> "$TEMP_FILE"
+            echo "" >> "$TEMP_FILE"
+            echo "" >> "$TEMP_FILE"
+        fi
+        
+        if git log "$LAST_TAG"..HEAD --oneline 2>/dev/null | grep -qi "fix\|bug\|patch\|correct"; then
+            HAS_FIXED=true
+            echo "### Fixed" >> "$TEMP_FILE"
+            git log "$LAST_TAG"..HEAD --oneline --grep="^fix\|^bug" --pretty=format:"- %s" 2>/dev/null | sed 's/^fix: //i; s/^bug: //i' >> "$TEMP_FILE"
+            echo "" >> "$TEMP_FILE"
+            echo "" >> "$TEMP_FILE"
+        fi
+        
+        if git log "$LAST_TAG"..HEAD --oneline 2>/dev/null | grep -qi "remove\|delete"; then
+            HAS_REMOVED=true
+            echo "### Removed" >> "$TEMP_FILE"
+            git log "$LAST_TAG"..HEAD --oneline --grep="^remove\|^delete" --pretty=format:"- %s" 2>/dev/null | sed 's/^remove: //i; s/^delete: //i' >> "$TEMP_FILE"
+            echo "" >> "$TEMP_FILE"
+            echo "" >> "$TEMP_FILE"
+        fi
+        
+        # If no categorized commits, show all recent commits
+        if [ "$HAS_ADDED" = false ] && [ "$HAS_CHANGED" = false ] && [ "$HAS_FIXED" = false ] && [ "$HAS_REMOVED" = false ]; then
+            echo "### Changed" >> "$TEMP_FILE"
+            git log "$LAST_TAG"..HEAD --oneline --pretty=format:"- %s" 2>/dev/null | head -10 >> "$TEMP_FILE"
+            echo "" >> "$TEMP_FILE"
+            echo "" >> "$TEMP_FILE"
+        fi
+        
+        # Add summary statistics
+        echo "### Summary" >> "$TEMP_FILE"
+        echo "- Files added: $ADDED_FILES" >> "$TEMP_FILE"
+        echo "- Files modified: $MODIFIED_FILES" >> "$TEMP_FILE"
+        echo "- Files removed: $DELETED_FILES" >> "$TEMP_FILE"
+        echo "" >> "$TEMP_FILE"
+    fi
+    
+    # Append existing changelog content (skip the header)
+    if [ -f CHANGELOG.md ]; then
+        # Skip the first few header lines and append the rest
+        tail -n +7 CHANGELOG.md >> "$TEMP_FILE" 2>/dev/null || true
+    fi
+    
+    # Replace the original file
+    mv "$TEMP_FILE" CHANGELOG.md
+    
+    print_status "CHANGELOG.md updated successfully"
+}
+
+update_changelog
+
+# Add all files including the updated CHANGELOG
 print_status "Adding files to git..."
 git add .
 
