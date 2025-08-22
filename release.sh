@@ -128,9 +128,30 @@ EOF
         echo "" >> "$TEMP_FILE"
     else
         # Analyze changes since last tag
-        local ADDED_FILES=$(git diff --name-status "$LAST_TAG"..HEAD 2>/dev/null | grep "^A" | wc -l | tr -d ' ')
-        local MODIFIED_FILES=$(git diff --name-status "$LAST_TAG"..HEAD 2>/dev/null | grep "^M" | wc -l | tr -d ' ')
-        local DELETED_FILES=$(git diff --name-status "$LAST_TAG"..HEAD 2>/dev/null | grep "^D" | wc -l | tr -d ' ')
+        # First check if there are any commits since the last tag
+        local COMMIT_COUNT=$(git rev-list "$LAST_TAG"..HEAD --count 2>/dev/null || echo "0")
+        
+        if [ "$COMMIT_COUNT" = "0" ] || [ -z "$COMMIT_COUNT" ]; then
+            # No commits since last tag, count all tracked files
+            local ADDED_FILES=$(git ls-files 2>/dev/null | wc -l | tr -d ' ')
+            local MODIFIED_FILES=0
+            local DELETED_FILES=0
+        else
+            # Count actual changes
+            local ADDED_FILES=$(git diff --name-status "$LAST_TAG"..HEAD 2>/dev/null | grep "^A" | wc -l | tr -d ' ')
+            local MODIFIED_FILES=$(git diff --name-status "$LAST_TAG"..HEAD 2>/dev/null | grep "^M" | wc -l | tr -d ' ')
+            local DELETED_FILES=$(git diff --name-status "$LAST_TAG"..HEAD 2>/dev/null | grep "^D" | wc -l | tr -d ' ')
+        fi
+        
+        # If all zeros, try alternative counting method
+        if [ "$ADDED_FILES" = "0" ] && [ "$MODIFIED_FILES" = "0" ] && [ "$DELETED_FILES" = "0" ]; then
+            # Count all project files as a fallback
+            local TOTAL_FILES=$(find . -type f -not -path "./.git/*" -not -path "./node_modules/*" -not -path "./frontend/node_modules/*" -not -path "./frontend/build/*" -not -path "./generated/*" 2>/dev/null | wc -l | tr -d ' ')
+            local GO_FILES=$(find . -name "*.go" -not -path "./generated/*" 2>/dev/null | wc -l | tr -d ' ')
+            local TS_FILES=$(find . -name "*.ts" -o -name "*.tsx" -not -path "./node_modules/*" -not -path "./frontend/node_modules/*" 2>/dev/null | wc -l | tr -d ' ')
+            
+            ADDED_FILES=$TOTAL_FILES
+        fi
         
         # Check for specific changes
         local HAS_ADDED=false
@@ -189,9 +210,18 @@ EOF
         
         # Add summary statistics
         echo "### Summary" >> "$TEMP_FILE"
-        echo "- Files added: $ADDED_FILES" >> "$TEMP_FILE"
-        echo "- Files modified: $MODIFIED_FILES" >> "$TEMP_FILE"
-        echo "- Files removed: $DELETED_FILES" >> "$TEMP_FILE"
+        if [ "$COMMIT_COUNT" = "0" ] || [ -z "$COMMIT_COUNT" ]; then
+            # Show total project statistics when no commits to compare
+            echo "- Total project files: $ADDED_FILES" >> "$TEMP_FILE"
+            if [ -n "$GO_FILES" ]; then
+                echo "- Go files: $GO_FILES" >> "$TEMP_FILE"
+                echo "- TypeScript/React files: $TS_FILES" >> "$TEMP_FILE"
+            fi
+        else
+            echo "- Files added: $ADDED_FILES" >> "$TEMP_FILE"
+            echo "- Files modified: $MODIFIED_FILES" >> "$TEMP_FILE"
+            echo "- Files removed: $DELETED_FILES" >> "$TEMP_FILE"
+        fi
         echo "" >> "$TEMP_FILE"
     fi
     
